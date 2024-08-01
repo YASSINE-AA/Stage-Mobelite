@@ -2,7 +2,6 @@ var filesToDownload = [];
 let loadedFiles = [];
 
 
-
 function loadExistingFiles() {
 
     fetch('/getFiles', { method: 'GET' })
@@ -59,7 +58,7 @@ function deleteFile(file) {
                 console.warn('No matching row found for file:', file.name);
             }
         } else {
-            console.error('Error deleting file:', response);
+            toastr.error('Insufficient permissions to delete file');
         }
     }).catch(error => {
         console.error('Error deleting file:', error);
