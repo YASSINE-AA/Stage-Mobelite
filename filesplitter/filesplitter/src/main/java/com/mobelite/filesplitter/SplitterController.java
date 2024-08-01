@@ -4,6 +4,10 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
@@ -13,6 +17,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -29,49 +34,72 @@ public class SplitterController {
     private Environment env;
     private final SplitterImpl splitterFactory = SplitterFactory.createInstance();
     private final String uploadsDir = System.getProperty("user.dir") + File.separator + "uploads" + File.separator;
+    
+    private final ExecutorService executorService = Executors.newFixedThreadPool(4); 
 
     @GetMapping("/existingUploads")
-    public ResponseEntity<String[]> existingUploads() throws IOException {
+    public ResponseEntity<List<Map<String, String>>> existingUploads() throws IOException {
         return ResponseEntity.ok(SplitterImpl.ExistingUploads());
     }
-
 @PostMapping("/split")
 public ResponseEntity<String> split(@RequestParam("filename") String filename) throws IOException {
     String filePath = uploadsDir + filename;
-
     File fileToSplit = new File(filePath);
     if (!fileToSplit.exists()) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body("File not found");
     }
 
-    File[] files = splitterFactory.split(fileToSplit, env.getProperty("filesplitter.chunkSize", Double.class));
+    HttpHeaders headers = new HttpHeaders(); 
+    try {
+        Future<File[]> future = executorService.submit(() -> {
+            return splitterFactory.split(fileToSplit, env.getProperty("filesplitter.chunkSize", Double.class));
+        });
 
-    HttpHeaders headers = new HttpHeaders();
-    headers.add("X-Total-Chunks", String.valueOf(files.length));
+        File[] files = future.get(); 
+        headers.add("X-Total-Chunks", String.valueOf(files.length));
 
-    return ResponseEntity.status(HttpStatus.OK)
-                         .headers(headers)
-                         .body("Splitting completed");
+        return ResponseEntity.status(HttpStatus.OK)
+                             .headers(headers)
+                             .body("Splitting completed");
+    } catch (Exception e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error splitting file");
+    }
 }
-  @GetMapping("/downloadFileChunk")
-public ResponseEntity<Resource> downloadFileChunk(
-        @RequestParam("filename") String filename,
-        @RequestParam("chunkIndex") int chunkIndex) throws IOException {
 
+@DeleteMapping("/deleteFile")
+public ResponseEntity<String> deleteFile(@RequestParam("filename") String filename) throws IOException {
     String filePath = uploadsDir + filename;
-    File chunk = new File(String.format("%s.filesplitter.part_%d", filePath, chunkIndex));
-
-    if (!chunk.exists()) {
-        return ResponseEntity.status(HttpStatus.NO_CONTENT).build(); // No content if chunk is missing
+    File fileToDelete = new File(filePath);
+    if (!fileToDelete.exists()) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("File not found");
     }
 
-    FileSystemResource resource = new FileSystemResource(chunk);
+    if (!fileToDelete.delete()) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error deleting file");
+    }
 
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-    headers.setContentDispositionFormData("attachment", chunk.getName());
-    return new ResponseEntity<>(resource, headers, HttpStatus.OK);
+    return ResponseEntity.ok("File deleted successfully");
 }
+
+    @GetMapping("/downloadFileChunk")
+    public ResponseEntity<Resource> downloadFileChunk(
+            @RequestParam("filename") String filename,
+            @RequestParam("chunkIndex") int chunkIndex) throws IOException {
+
+        String filePath = uploadsDir + filename;
+        File chunk = new File(String.format("%s.filesplitter.part_%d", filePath, chunkIndex));
+
+        if (!chunk.exists()) {
+            return ResponseEntity.status(HttpStatus.NO_CONTENT).build(); // No content if chunk is missing
+        }
+
+        FileSystemResource resource = new FileSystemResource(chunk);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+        headers.setContentDispositionFormData("attachment", chunk.getName());
+        return new ResponseEntity<>(resource, headers, HttpStatus.OK);
+    }
 
     @PostMapping("/merge")
     public ResponseEntity<String> merge(@RequestParam("files") List<MultipartFile> files, @RequestParam("filename") String filename) throws IOException {
@@ -79,16 +107,26 @@ public ResponseEntity<Resource> downloadFileChunk(
         if (!dir.exists()) {
             dir.mkdirs();
         }
-        try {
-            List<File> fileList = new ArrayList<>();
-            for (var file : files) {
-                fileList.add(SplitterImpl.FileFromMultipart(file, uploadsDir));
+
+        Future<String> future = executorService.submit(() -> {
+            try {
+                List<File> fileList = new ArrayList<>();
+                for (var file : files) {
+                    fileList.add(SplitterImpl.FileFromMultipart(file, uploadsDir));
+                }
+                splitterFactory.merge(fileList.toArray(File[]::new), uploadsDir + filename);
+                return "Files uploaded and merged successfully!";
+            } catch (IOException e) {
+                System.out.println(e);
+                return "Failed to upload and merge files";
             }
-            splitterFactory.merge(fileList.toArray(File[]::new), uploadsDir + filename);
-            return ResponseEntity.ok("Files uploaded and merged successfully!");
-        } catch (IOException e) {
-            System.out.println(e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to upload and merge files");
+        });
+
+        try {
+            String result = future.get();
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error merging files");
         }
     }
 }

@@ -10,7 +10,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.springframework.web.multipart.MultipartFile;
 
@@ -91,17 +95,36 @@ public class SplitterImpl implements Splitter {
 
 
 
-    public static String[] ExistingUploads() throws IOException {
+    public static List<Map<String, String>> ExistingUploads() throws IOException {
         String uploadsDir = "uploads/";
         File dir = new File(uploadsDir);
         if (!dir.exists()) {
             dir.mkdirs();
         }
 
-        String[] files = dir.list();
-        files = Arrays.stream(files).filter(file -> !file.contains(".filesplitter.")).toArray(String[]::new);
+        File[] files = dir.listFiles();
+        files = Arrays.stream(files).filter(file -> !file.getName().contains(".filesplitter.")).toArray(File[]::new);
 
-        return files;
+        List<Map<String, String>> response = new ArrayList<>();
+       
+
+        for (File file : files) {
+             Map<String, String> map = new HashMap<>();
+            map.put("name", file.getName());
+            if(file.length()/1024/1024/1024 >= 1){
+                map.put("size", String.valueOf(file.length() /1024/1024/1024) + "GB");
+            } else if(file.length()/1024/1024 >= 1){
+                map.put("size", String.valueOf(file.length() /1024/1024) + "MB");
+            } else if(file.length()/1024 >= 1){
+                map.put("size", String.valueOf(file.length() /1024) + "KB");
+            } else {
+                map.put("size", String.valueOf(file.length()) + "B");
+            }
+
+            response.add(map);
+        }
+            
+        return response;
     }
 
 }

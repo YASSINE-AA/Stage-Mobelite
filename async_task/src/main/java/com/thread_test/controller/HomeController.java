@@ -31,6 +31,8 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import com.thread_test.entity.User;
+
 @Controller
 public class HomeController {
 
@@ -220,7 +222,7 @@ public class HomeController {
     }
 
     @GetMapping("/")
-    public String index(final Model model) {
+    public String index() {
         return "index";
     }
 
