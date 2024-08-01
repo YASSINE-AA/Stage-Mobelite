@@ -1,34 +1,71 @@
 var filesToDownload = [];
+let loadedFiles = [];
+
+
 
 function loadExistingFiles() {
+
     fetch('/getFiles', { method: 'GET' })
         .then(response => response.json())
         .then(data => {
             if (data.length > 0) {
+                const uploadButton = document.getElementById('uploadAllBtn');
+                const downloadButton = document.getElementById('downloadAllBtn');
+    downloadButton.style.visibility = "visible";
+    uploadButton.style.visibility = "hidden";
                 data.forEach(file => {
                     filesToDownload.push(file);
-                    var fileName = file.split('\\').pop();
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td><input type="checkbox" class="file-checkbox" value="${file.id}"></td>
-                        <td class="download-label">${fileName}</td>
-                        <td><button type="button" class="btn btn-danger download-btn"><i class="fa fa-download"></i> Download</button></td>
+                        <td class="download-label">${file.name}</td>
+                        <td>${file.size}</td>
+                        <td><button type="button" class="btn btn-success download-btn"><i class="fa fa-download"></i> Download</button> <button type="button" class="btn btn-danger delete-btn"><i class="fa fa-trash"></i> Delete</button></td>
                         <td><progress class="download-progress" value="0" max="100"></progress></td>
                     `;
                     document.getElementById('fileTable').appendChild(row);
                 });
 
+                const deleteButtons = document.querySelectorAll('.delete-btn');
+                deleteButtons.forEach((button, index) => {
+                    button.addEventListener('click', function() {
+                        button.disabled = true;
+                        deleteFile(filesToDownload[index]);
+                    });
+                });
+
                 const downloadButtons = document.querySelectorAll('.download-btn');
                 downloadButtons.forEach((button, index) => {
                     button.addEventListener('click', function() {
-                        downloadFileInChunks(filesToDownload[index], button.closest('tr').querySelector('.download-progress'));
+                        button.disabled = true;  
+                        downloadFileInChunks(filesToDownload[index], button.closest('tr').querySelector('.download-progress'), button);
                     });
                 });
             }
         });
 }
 
-function downloadFileInChunks(file, progressElement) {
+function deleteFile(file) {
+    fetch('/deleteFile?filename=' + encodeURIComponent(file.name), {
+        method: 'DELETE'
+    }).then(response => {
+        if (response.status === 200) {
+            toastr.success('File deleted successfully!');
+            const allRows = Array.from(document.querySelectorAll('tr'));
+            const row = allRows.find(row => row.querySelector('.download-label')?.innerText === file.name);
+            if (row) {
+                row.remove();
+            } else {
+                console.warn('No matching row found for file:', file.name);
+            }
+        } else {
+            console.error('Error deleting file:', response);
+        }
+    }).catch(error => {
+        console.error('Error deleting file:', error);
+    });
+}
+function downloadFileInChunks(file, progressElement, button) {
     if (!file) {
         console.error('File path is undefined');
         return;
@@ -37,12 +74,11 @@ function downloadFileInChunks(file, progressElement) {
     const chunkSize = 1024 * 1024 * 200; // 200 MB
     let chunks = [];
     let chunkIndex = 1;
-    let totalChunks = 0; // Initialize totalChunks
-
-    let filePath = file.split('\\').pop();
+    let totalChunks = 0; 
+    let filename = file.name;
 
     function fetchChunk() {
-        fetch(`/downloadFileChunk?filename=${encodeURIComponent(filePath)}&chunkIndex=${chunkIndex}`, {
+        fetch(`/downloadFileChunk?filename=${encodeURIComponent(filename)}&chunkIndex=${chunkIndex}`, {
             method: 'GET'
         }).then(response => {
             if (response.status === 204) {
@@ -53,17 +89,15 @@ function downloadFileInChunks(file, progressElement) {
                 return response.arrayBuffer();
             }
         }).then(arrayBuffer => {
-            if (arrayBuffer != null && arrayBuffer.byteLength > 0) { // Only push non-empty arrays
+            if (arrayBuffer != null && arrayBuffer.byteLength > 0) {
                 chunks.push(new Uint8Array(arrayBuffer));
                 chunkIndex++;
                 updateProgress();
                 fetchChunk();
-            } else {
-                console.warn('Received empty array buffer');
-                mergeChunks();
-            }
+            } 
         }).catch(error => {
             console.error('There was a problem with the fetch operation:', error);
+            button.disabled = false;  
         });
     }
 
@@ -75,6 +109,7 @@ function downloadFileInChunks(file, progressElement) {
     function mergeChunks() {
         if (chunks.length === 0) {
             console.error('No chunks downloaded');
+            button.disabled = false; 
             return;
         }
 
@@ -89,21 +124,26 @@ function downloadFileInChunks(file, progressElement) {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = file.split('\\').pop();
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        window.URL.revokeObjectURL(url); 
+        window.URL.revokeObjectURL(url);
+        button.disabled = false;  
     }
 
-    fetch('/splitFile?filename=' + encodeURIComponent(filePath), {
+    fetch('/splitFile?filename=' + encodeURIComponent(filename), {
         method: 'POST'
     }).then(response => {
         if (response.status === 200) {
-            console.log(response.headers);
             totalChunks = parseInt(response.headers.get('X-Total-Chunks'), 10) || 0;
             fetchChunk();
+        } else {
+            button.disabled = false;  
         }
+    }).catch(error => {
+        console.error('There was a problem with the split file operation:', error);
+        button.disabled = false;  
     });
 }
 
@@ -165,9 +205,20 @@ function uploadAllFiles() {
     });
 }
 
-let loadedFiles = [];
+function downloadAllFiles() {
+    const checkboxes = document.querySelectorAll('.file-checkbox');
+    checkboxes.forEach((checkbox, index) => {
+        if (checkbox.checked) {
+            downloadFileInChunks(filesToDownload[index], checkbox.closest('tr').querySelector('.download-progress'), checkbox.closest('tr').querySelector('.download-btn'));
+        }
+    });
+}
 
 function loadFiles() {
+    const uploadButton = document.getElementById('uploadAllBtn');
+const downloadButton = document.getElementById('downloadAllBtn');
+    downloadButton.style.visibility = "hidden";
+    uploadButton.style.visibility = "visible";
     const fileInput = document.querySelector('input[name="files"]');
     loadedFiles = Array.from(fileInput.files);
 
@@ -198,4 +249,17 @@ function loadFiles() {
     });
 }
 
+function periodicCheck() {
+    setInterval(() => {
+        const downloadCheckboxes = document.querySelectorAll('.file-checkbox:checked');
+        downloadCheckboxes.forEach((checkbox, index) => {
+            downloadFileInChunks(filesToDownload[index], checkbox.closest('tr').querySelector('.download-progress'), checkbox.closest('tr').querySelector('.download-btn'));
+        });
+
+        uploadAllFiles();
+    }, 5000);
+}
+
 loadExistingFiles();
+loadFiles();
+periodicCheck();

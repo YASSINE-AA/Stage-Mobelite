@@ -1,38 +1,32 @@
 package com.thread_test.entity;
 
-
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name="users")
+@Table(name = "users")
 public class User {
 
     @Id
-    private Long identifier;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, unique = true)
     private String username;
-    private String first_name;
-    private String last_name;
 
-    public User() {}
+    @Column(nullable = false)
+    private String password;
 
-    public User(Long identifier, String username, String first_name, String last_name) {
-        this.identifier = identifier;
-        this.username = username;
-        this.first_name = first_name;
-        this.last_name = last_name;
+    @Column(nullable = false)
+    private String role = "ROLE_USER";
+
+    public Long getId() {
+        return id;
     }
-
-
-    public void setIdentifier(Long identifier) {
-        this.identifier = identifier;
-    }
-
-    public Long getIdentifier() {
-        return identifier;
-    }
-
 
     public String getUsername() {
         return username;
@@ -42,19 +36,19 @@ public class User {
         this.username = username;
     }
 
-    public String getFirst_name() {
-        return first_name;
+    public String getPassword() {
+        return password;
     }
 
-    public void setFirst_name(String first_name) {
-        this.first_name = first_name;
+    public void setPassword(String password) {
+        this.password = password;
     }
 
-    public String getLast_name() {
-        return last_name;
+    public String getRole() {
+        return role;
     }
 
-    public void setLast_name(String last_name) {
-        this.last_name = last_name;
+    public void setRole(String role) {
+        this.role = role;
     }
 }

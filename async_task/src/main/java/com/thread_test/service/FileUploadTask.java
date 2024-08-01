@@ -35,8 +35,8 @@ public class FileUploadTask implements Callable<Boolean> {
             String line;
             while ((line = reader.readLine()) != null && !line.isEmpty()) {
                 String[] data = line.split(";");
-                User user_tmp = new User(Long.valueOf(data[1]), data[0], data[2], data[3]);
-                crudService.insert(user_tmp);
+              //  User user_tmp = new User(Long.valueOf(data[1]), data[0], data[2], data[3]);
+             //   crudService.insert(user_tmp);
             }
         } catch (IOException e) {
             throw new RuntimeException(e);

@@ -41,8 +41,12 @@
     </form>
     <br/>
 
+    
     <form id="uploadForm">
-        <button type="button" class="btn btn-primary" style="float: right; margin-bottom: 2rem;" onclick="uploadAllFiles()"><i class="fa fa-upload"></i> Upload Selected</button>
+        
+        <button type="button" class="btn btn-primary" style="float: right; margin-bottom: 2rem;" onclick="uploadAllFiles()" id="uploadAllBtn"><i class="fa fa-upload"></i> Upload Selected</button>
+        <button type="button" class="btn btn-primary" style="float: right; margin-bottom: 2rem; margin-right: -15rem;" onclick="downloadAllFiles()" id="downloadAllBtn"><i class="fa fa-download"></i> Download Selected</button>
+
     </form>
     <br/>
 
@@ -50,14 +54,16 @@
         <thead>
         <tr>
             <th scope="col">Select</th>
+            
             <th scope="col">Filename</th>
-            <th scope="col">Upload</th>
+            <th scope="col">Size</th>
+            <th scope="col">Actions</th>
             <th>Progress</th>
+            
 
         </tr>
         </thead>
         <tbody id="fileTable">
-        <!-- Files will be dynamically inserted here -->
         </tbody>
     </table>
 </div>
